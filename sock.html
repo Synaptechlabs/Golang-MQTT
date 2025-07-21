@@ -1,23 +1,75 @@
-<!-- websockets.html -->
-<!-- simple frontend to test from -->
-<input id="input" type="text" />
-<button onclick="send()">Send</button>
-<pre id="output"></pre>
-<script>
-	var input = document.getElementById("input");
-	var output = document.getElementById("output");
-	var socket = new WebSocket("ws://localhost:8080/echo");
+<!DOCTYPE html>
+<html>
+<head>
+  <title>MQTT Web Client</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.js"></script>
+</head>
+<body>
+  <h2>MQTT Web Client</h2>
 
-	socket.onopen = function () {
-		output.innerHTML += "Status: Connected\n";
-	};
+  <label>Client ID:</label>
+  <input id="clientId" value="webclient123"><br>
 
-	socket.onmessage = function (e) {
-		output.innerHTML += "Server: " + e.data + "\n";
-	};
+  <label>Topic:</label>
+  <input id="topic" value="nn/input"><br>
 
-	function send() {
-		socket.send(input.value);
-		input.value = "";
-	}
-</script>
+  <label>Message:</label>
+  <input id="msg" type="text" value="Hello from browser"><br>
+
+  <button onclick="send()">Send</button>
+
+  <pre id="log"></pre>
+
+  <script>
+    let log = document.getElementById("log");
+    let client;
+
+    function logMessage(msg) {
+      log.textContent += msg + "\n";
+    }
+
+    window.onload = function () {
+      const clientId = document.getElementById("clientId").value;
+      client = new Paho.MQTT.Client("broker.hivemq.com", 8000, clientId);
+
+      client.onConnectionLost = function (response) {
+        logMessage("❌ Disconnected: " + response.errorMessage);
+      };
+
+      client.onMessageArrived = function (message) {
+        logMessage(`[RECV] ${message.destinationName}: ${message.payloadString}`);
+      };
+
+      client.connect({
+        onSuccess: function () {
+          logMessage("[✅ Connected to HiveMQ broker]");
+          client.subscribe("nn/result");
+          logMessage("[Subscribed to nn/result]");
+        },
+        onFailure: function (err) {
+          logMessage("❌ Connect failed: " + err.errorMessage);
+        },
+        useSSL: false
+      });
+    };
+
+    function send() {
+      if (!client || !client.isConnected()) {
+        logMessage("❌ Not connected to MQTT broker.");
+        return;
+      }
+
+      const topic = document.getElementById("topic").value;
+      const text = document.getElementById("msg").value;
+
+      const message = new Paho.MQTT.Message(text);
+      message.destinationName = topic;
+      client.send(message);
+
+      logMessage("[Sent] " + text);
+    }
+  </script>
+</body>
+</html>
+
+
