@@ -1,61 +1,158 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>MQTT Web Client</title>
+  <meta charset="UTF-8" />
+  <title>LCARS MQTT Console</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.js"></script>
-</head>
-<body>
-  <h2>MQTT Web Client</h2>
-  <label>Client ID:</label>
-  <input id="clientId" value="webclient123"><br>
-  <label>Topic:</label>
-  <input id="topic" value="test/topic"><br>
-  <label>Message:</label>
-  <input id="msg" value="Hello from browser"><br>
-  <button onclick="send()">Send</button>
-  <pre id="log"></pre>
-
-  <script>
-    let client;
-    let log = document.getElementById("log");
-
-    function logMessage(msg) {
-      log.textContent += msg + "\n";
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Lucida Console', Monaco, monospace;
+      background-color: #000;
+      color: #FFD700;
     }
 
-    window.onload = function () {
-      const cid = document.getElementById("clientId").value;
-      client = new Paho.MQTT.Client("broker.hivemq.com", 8000, cid);
+    h1 {
+      margin: 0;
+      padding: 20px;
+      background-color: #9932CC;
+      color: black;
+      text-align: center;
+      border-bottom: 3px solid #FFD700;
+    }
 
-      client.onConnectionLost = function (res) {
-        logMessage("Disconnected: " + res.errorMessage);
+    .container {
+      padding: 20px;
+    }
+
+    label {
+      display: block;
+      margin-top: 10px;
+      color: #90EE90;
+    }
+
+    input, button {
+      background-color: #333;
+      color: #FFD700;
+      border: 2px solid #9932CC;
+      padding: 8px;
+      margin-top: 5px;
+      width: 100%;
+      font-size: 1rem;
+    }
+
+    button {
+      background-color: #1E90FF;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #00CED1;
+    }
+
+    pre {
+      background-color: #111;
+      border: 2px solid #FFD700;
+      padding: 10px;
+      margin-top: 20px;
+      height: 200px;
+      overflow-y: auto;
+      color: #00FF7F;
+      white-space: pre-wrap;
+    }
+
+    .lcars-block {
+      height: 20px;
+      background-color: #FF8C00;
+      margin-bottom: 10px;
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>LCARS MQTT Console</h1>
+  <div class="container">
+    <div class="lcars-block"></div>
+
+    <label for="clientId">Client ID</label>
+    <input id="clientId" value="webclient123" />
+
+    <label for="topic">Topic</label>
+    <input id="topic" value="test4472" />
+
+    <label for="msg">Message</label>
+    <input id="msg" value="Hello from LCARS Console" />
+
+    <button id="sendBtn" onclick="send()" disabled>Send Message</button>
+
+    <pre id="log">[Initializing LCARS MQTT console...]\n</pre>
+
+    <!-- Audio for LCARS FX -->
+    <audio id="chirpIn" src="tos_chirp_1.mp3" preload="auto"></audio>
+    <audio id="chirpOut" src="tos_communicator_beep.mp3" preload="auto"></audio>
+  </div>
+
+  <script>
+    let log = document.getElementById("log");
+    let client;
+    const sendBtn = document.getElementById("sendBtn");
+    const chirpIn = document.getElementById("chirpIn");
+    const chirpOut = document.getElementById("chirpOut");
+
+    function logMessage(msg, isIncoming = false, isOutgoing = false) {
+      log.textContent += msg + "\n";
+      log.scrollTop = log.scrollHeight;
+      if (isIncoming) chirpIn.play();
+      if (isOutgoing) chirpOut.play();
+    }
+
+    function connectMQTT() {
+      const clientId = document.getElementById("clientId").value;
+      client = new Paho.MQTT.Client("broker.hivemq.com", 8000, clientId);
+
+      client.onConnectionLost = (response) => {
+        logMessage("[DISCONNECT] " + response.errorMessage);
+        sendBtn.disabled = true;
       };
 
-      client.onMessageArrived = function (message) {
-        logMessage("[RECV] " + message.destinationName + ": " + message.payloadString);
+      client.onMessageArrived = (message) => {
+        logMessage(`[RECV] ${message.destinationName}: ${message.payloadString}`, true, false);
       };
 
       client.connect({
         useSSL: false,
         onSuccess: () => {
-          logMessage("[Connected to HiveMQ broker]");
-          client.subscribe("test4472/#");
-          logMessage("[Subscribed to test/#]");
+          logMessage("[CONNECTED] Subscribing to 'test4472/result'");
+          client.subscribe("test4472/result");
+          sendBtn.disabled = false;
         },
-        onFailure: e => logMessage("Connect failed: " + e.errorMessage)
+        onFailure: (err) => {
+          logMessage("[ERROR] Connect failed: " + err.errorMessage);
+        }
       });
-    };
+    }
 
     function send() {
+      if (!client || !client.isConnected()) {
+        logMessage("[WARN] Not connected.");
+        return;
+      }
+
       const topic = document.getElementById("topic").value;
       const text = document.getElementById("msg").value;
       const message = new Paho.MQTT.Message(text);
       message.destinationName = topic;
-      client.send(message);
-      logMessage("[Sent] " + text);
+
+      try {
+        client.send(message);
+        logMessage("[SENT] " + text, false, true);
+      } catch (e) {
+        logMessage("[ERROR] Send failed: " + e.message);
+      }
     }
+
+    window.onload = connectMQTT;
   </script>
 </body>
 </html>
-
 
